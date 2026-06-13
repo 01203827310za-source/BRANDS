@@ -6,12 +6,9 @@ dockerfilePath = "Dockerfile"
 startCommand = "node server.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
-restartPolicyType = "on-failure"
-restartPolicyMaxRetries = 3
 
 [[services]]
 name = "web"
 internalPort = 3000
-
 [environments.production.deploy]
 numReplicas = 1
