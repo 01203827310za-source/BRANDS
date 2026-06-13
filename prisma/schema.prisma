@@ -1,0 +1,363 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  password     String?
+  passwordHash String?
+  name         String?
+  role         Role      @default(ADMIN)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Brand {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  websiteUrl      String?
+  newArrivalsUrl  String?
+  collectionsUrl  String?
+  launchUrl       String?
+  instagramHandle String?
+  instagramUrl    String?
+  country         String?
+  category        BrandCategory @default(SPORTSWEAR)
+  priority        Priority @default(MEDIUM)
+  isActive        Boolean  @default(true)
+  logoUrl         String?
+  notes           String?
+  lastCrawledAt   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sources         BrandSource[]
+  products        Product[]
+  collections     Collection[]
+  instagramPosts  InstagramPost[]
+  discoveries     Discovery[]
+  crawlJobs       CrawlJob[]
+
+  @@map("brands")
+}
+
+model BrandSource {
+  id          String     @id @default(cuid())
+  brandId     String
+  brand       Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  sourceType  SourceType
+  url         String
+  isActive    Boolean    @default(true)
+  crawlFreq   Int        @default(60) // minutes
+  lastCrawled DateTime?
+  lastHash    String?
+  errorCount  Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([brandId, sourceType])
+  @@map("brand_sources")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  externalId    String?
+  name          String
+  url           String   @unique
+  urlHash       String?
+  imageUrls     String[]
+  price         Float?
+  salePrice     Float?
+  currency      String?
+  category      String?
+  color         String?
+  description   String?
+  sizes         String[]
+  releaseDate   String?
+  collectionName String?
+  gender        String?
+  tags          String[]
+  isNew         Boolean  @default(true)
+  isInStock     Boolean  @default(true)
+  rawData       Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  discoveries   Discovery[]
+
+  @@map("products")
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name        String
+  url         String?
+  imageUrls   String[]
+  description String?
+  season      String?
+  year        Int?
+  isActive    Boolean  @default(true)
+  launchDate  DateTime?
+  rawData     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  discoveries Discovery[]
+
+  @@map("collections")
+}
+
+model InstagramPost {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  postId      String   @unique
+  postUrl     String?
+  mediaUrls   String[]
+  caption     String?
+  hashtags    String[]
+  mentions    String[]
+  likes       Int?
+  comments    Int?
+  postType    String?  // IMAGE, VIDEO, CAROUSEL, REEL
+  postedAt    DateTime?
+  rawData     Json?
+  createdAt   DateTime @default(now())
+
+  discoveries Discovery[]
+
+  @@map("instagram_posts")
+}
+
+model Discovery {
+  id              String          @id @default(cuid())
+  brandId         String
+  brand           Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  discoveryType   DiscoveryType
+  sourceType      SourceType
+  title           String
+  summary         String?
+  url             String?
+  imageUrls       String[]
+  contentHash     String?
+  isDuplicate     Boolean         @default(false)
+  isNotified      Boolean         @default(false)
+  notifiedAt      DateTime?
+  importanceScore Float?          @default(0)
+  confidenceScore Float?          @default(0)
+  productId       String?
+  product         Product?        @relation(fields: [productId], references: [id])
+  collectionId    String?
+  collection      Collection?     @relation(fields: [collectionId], references: [id])
+  instagramPostId String?
+  instagramPost   InstagramPost?  @relation(fields: [instagramPostId], references: [id])
+  rawData         Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  aiAnalysis      AiAnalysis?
+  notifications   Notification[]
+
+  @@map("discoveries")
+}
+
+model Notification {
+  id          String             @id @default(cuid())
+  discoveryId String?
+  discovery   Discovery?         @relation(fields: [discoveryId], references: [id])
+  channel     NotificationChannel
+  status      NotificationStatus @default(PENDING)
+  message     String?
+  metadata    Json?
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime           @default(now())
+
+  @@map("notifications")
+}
+
+model CrawlJob {
+  id          String      @id @default(cuid())
+  brandId     String?
+  brand       Brand?      @relation(fields: [brandId], references: [id])
+  jobType     JobType
+  status      JobStatus   @default(PENDING)
+  sourceUrl   String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  error       String?
+  itemsFound  Int         @default(0)
+  itemsNew    Int         @default(0)
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  logs        CrawlLog[]
+
+  @@map("crawl_jobs")
+}
+
+model CrawlLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       CrawlJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  level     LogLevel @default(INFO)
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@map("crawl_logs")
+}
+
+model AiAnalysis {
+  id               String        @id @default(cuid())
+  discoveryId      String        @unique
+  discovery        Discovery     @relation(fields: [discoveryId], references: [id], onDelete: Cascade)
+  model            String?
+  classifiedAs     String        @default("OTHER")
+  summary          String?
+  reasoning        String?
+  confidence       Float         @default(0.5)
+  importanceScore  Float         @default(0.5)
+  shouldNotify     Boolean       @default(false)
+  keywords         String[]      @default([])
+  productName      String?
+  collectionName   String?
+  releaseDate      String?
+  isLimitedEdition Boolean       @default(false)
+  isCollaboration  Boolean       @default(false)
+  rawResponse      Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@map("ai_analysis")
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String?
+  isSecret  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model SystemEvent {
+  id        String          @id @default(cuid())
+  type      SystemEventType
+  level     LogLevel        @default(INFO)
+  message   String
+  metadata  Json?
+  createdAt DateTime        @default(now())
+
+  @@map("system_events")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+enum BrandCategory {
+  SPORTSWEAR
+  STREETWEAR
+  LUXURY
+  OUTDOOR
+  FASHION
+  FOOTWEAR
+  OTHER
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SourceType {
+  WEBSITE
+  NEW_ARRIVALS
+  COLLECTIONS
+  LAUNCHES
+  INSTAGRAM
+  WEB_SEARCH
+  RSS
+}
+
+enum DiscoveryType {
+  NEW_PRODUCT
+  NEW_COLLECTION
+  LIMITED_DROP
+  RESTOCK
+  PROMOTION
+  ADVERTISEMENT
+  NEWS
+  OTHER
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  EMAIL
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum JobType {
+  WEBSITE_CRAWL
+  INSTAGRAM_CRAWL
+  WEB_SEARCH
+  AI_ANALYSIS
+  NOTIFICATION
+  DAILY_DIGEST
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+enum SystemEventType {
+  CRAWLER_START
+  CRAWLER_COMPLETE
+  CRAWLER_ERROR
+  NEW_DISCOVERY
+  NOTIFICATION_SENT
+  NOTIFICATION_FAILED
+  SYSTEM_START
+  SYSTEM_ERROR
+  SETTINGS_UPDATED
+  BRAND_ADDED
+  BRAND_UPDATED
+}
