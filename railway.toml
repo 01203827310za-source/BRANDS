@@ -1,14 +1,10 @@
 [build]
-builder = "dockerfile"
+builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node server.js"
+startCommand = "sh start.sh"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
-
-[[services]]
-name = "web"
-internalPort = 3000
-[environments.production.deploy]
-numReplicas = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

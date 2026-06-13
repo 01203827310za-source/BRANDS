@@ -12,16 +12,19 @@
 //   globalThis persists for the lifetime of the OS process, so the flag survives
 //   every reload and prevents the scheduler from being started more than once.
 
-import { startScheduler } from '@/services/scheduler/cron';
-
 const g = globalThis as typeof globalThis & { schedulerBootstrapped?: boolean };
 
-if (!g.schedulerBootstrapped) {
+// Skip during `next build` — DATABASE_URL is not guaranteed at build time on Railway.
+// Dynamic import defers loading cron.ts (and its PrismaClient instantiation) until
+// after the container starts with DATABASE_URL injected at runtime.
+if (process.env.NEXT_PHASE !== 'phase-production-build' && !g.schedulerBootstrapped) {
   g.schedulerBootstrapped = true;
-  startScheduler().catch((err: Error) => {
-    console.error('[Scheduler] Bootstrap failed:', err.message);
-    g.schedulerBootstrapped = false; // allow retry on next hot reload
-  });
+  import('@/services/scheduler/cron')
+    .then(({ startScheduler }) => startScheduler())
+    .catch((err: Error) => {
+      console.error('[Scheduler] Bootstrap failed:', err.message);
+      g.schedulerBootstrapped = false;
+    });
 }
 
 export {};
