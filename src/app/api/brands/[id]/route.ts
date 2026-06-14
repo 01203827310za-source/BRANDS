@@ -57,6 +57,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       },
     });
 
+    // Keep brand_sources in sync with the URL fields on the brand.
+    const sourceMap: Array<{ field: keyof typeof parsed; sourceType: string; crawlFreq: number }> = [
+      { field: 'websiteUrl',     sourceType: 'WEBSITE',      crawlFreq: 120 },
+      { field: 'newArrivalsUrl', sourceType: 'NEW_ARRIVALS', crawlFreq: 60  },
+      { field: 'collectionsUrl', sourceType: 'COLLECTIONS',  crawlFreq: 120 },
+      { field: 'instagramUrl',   sourceType: 'INSTAGRAM',    crawlFreq: 30  },
+    ];
+
+    for (const { field, sourceType, crawlFreq } of sourceMap) {
+      const url = parsed[field] as string | undefined;
+      if (url === undefined) continue; // field not included in this request — leave source untouched
+      if (!url) continue;              // empty string — leave source untouched rather than storing a blank URL
+      await prisma.brandSource.upsert({
+        where: { brandId_sourceType: { brandId: params.id, sourceType: sourceType as any } },
+        update: { url },
+        create: { brandId: params.id, sourceType: sourceType as any, url, crawlFreq, isActive: true, errorCount: 0 },
+      });
+    }
+
     await prisma.systemEvent.create({
       data: {
         type: 'BRAND_UPDATED',
