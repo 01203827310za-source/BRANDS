@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSettings } from '@/services/settings';
 import { prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/debug/system
  *

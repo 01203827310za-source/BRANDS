@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { crawlState } from '@/services/crawler/crawlState';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/debug/crawl-status
  *

@@ -5,6 +5,8 @@ import { crawlAllActiveBrands } from '@/services/crawler/orchestrator';
 import { crawlState } from '@/services/crawler/crawlState';
 import { runWebSearchForAllBrands } from '@/services/search/webSearch';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getSettings } from '@/services/settings';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/debug/groq  (path kept as /debug/gemini for backwards compat)
  *

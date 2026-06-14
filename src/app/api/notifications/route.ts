@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db';
 import { notifyDiscovery } from '@/services/telegram/notifier';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

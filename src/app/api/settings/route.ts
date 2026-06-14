@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { updateSettings, invalidateCache } from '@/services/settings';
 import { testTelegramConnection } from '@/services/telegram/notifier';
 
+export const dynamic = 'force-dynamic';
+
 // Keys that must never be overwritten with an empty string via the settings form.
 // If the user clears one of these fields and saves, the existing DB value is preserved.
 const PROTECTED_SECRET_KEYS = new Set([

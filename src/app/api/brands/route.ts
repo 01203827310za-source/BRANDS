@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const BrandSchema = z.object({
   name: z.string().min(1).max(100),
   slug: z.string().min(1).max(100).optional(),
