@@ -47,9 +47,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma    ./node_mo
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma    ./node_modules/@prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma     ./node_modules/prisma
 
-# Startup script — chmod before USER switch so root can set execute bit
+# Write a global wrapper so `prisma` is available as a bare command.
+# Using a wrapper instead of a symlink avoids the execute-bit issue on the
+# copied JS file (which has 644 permissions from npm).
+RUN printf '#!/bin/sh\nexec node /app/node_modules/prisma/build/index.js "$@"\n' \
+    > /usr/local/bin/prisma && chmod +x /usr/local/bin/prisma
+
+# Startup script — strip CRLF in case of Windows checkout, then chmod
 COPY start.sh ./
-RUN chmod +x start.sh && chown nextjs:nodejs start.sh
+RUN sed -i 's/\r//' start.sh && chmod +x start.sh && chown nextjs:nodejs start.sh
 
 USER nextjs
 
