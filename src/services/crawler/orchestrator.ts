@@ -134,8 +134,20 @@ export async function crawlSource(
     }
 
     sr.itemsFound = result.items.length;
-    console.log(`[Crawler] Found: ${sr.itemsFound} items`);
-    await log('INFO', `Found ${sr.itemsFound} items`);
+    const meta = result.metadata ?? {};
+    const engine = meta.usedPlaywright ? 'playwright' : 'fetch';
+    console.log(
+      `[Crawler] Found: ${sr.itemsFound} items` +
+      ` | engine=${engine}` +
+      ` | status=${meta.httpStatus ?? 'n/a'}` +
+      ` | finalUrl=${meta.finalUrl ?? url}`,
+    );
+    await log('INFO', `Found ${sr.itemsFound} items via ${engine}`, {
+      httpStatus: meta.httpStatus,
+      finalUrl: meta.finalUrl,
+      usedPlaywright: meta.usedPlaywright,
+      fetchAttempts: meta.fetchAttempts,
+    });
 
     // Skip processing if content is unchanged
     const newHash = hashItems(result.items);

@@ -26,10 +26,22 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+# openssl — required by Prisma
+# chromium + rendering libs — required by Playwright headless browser
+RUN apk add --no-cache \
+    openssl \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-emoji
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Path to the Alpine-packaged Chromium binary (used by playwright-core via executablePath)
+ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
@@ -43,9 +55,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/public       ./public
 
 # Prisma schema, migrations, and generated binaries
 COPY --from=builder --chown=nextjs:nodejs /app/prisma                  ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma    ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma    ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma     ./node_modules/prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma       ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma       ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma        ./node_modules/prisma
+# playwright-core is loaded via dynamic import at runtime; copy it explicitly
+# because Next.js standalone output does not trace dynamic imports
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/playwright-core ./node_modules/playwright-core
 
 # Write a global wrapper so `prisma` is available as a bare command.
 # Using a wrapper instead of a symlink avoids the execute-bit issue on the
