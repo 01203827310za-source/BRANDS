@@ -2,7 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   experimental: {
-    serverComponentsExternalPackages: ['bcryptjs', '@prisma/client', 'node-cron', 'playwright-core'],
+    serverComponentsExternalPackages: ['bcryptjs', '@prisma/client', 'node-cron', 'playwright', 'playwright-core'],
   },
   images: {
     remotePatterns: [
@@ -27,7 +27,7 @@ const nextConfig = {
       config.externals = [
         ...(Array.isArray(prev) ? prev : [prev]),
         ({ request }, callback) => {
-          if (request === 'playwright-core') return callback(null, `commonjs ${request}`);
+          if (request === 'playwright' || request === 'playwright-core') return callback(null, `commonjs ${request}`);
           callback();
         },
       ];

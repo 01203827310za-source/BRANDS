@@ -58,8 +58,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma                  ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma       ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma       ./node_modules/@prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma        ./node_modules/prisma
-# playwright-core is loaded via dynamic import at runtime; copy it explicitly
-# because Next.js standalone output does not trace dynamic imports
+# playwright / playwright-core are loaded via dynamic import at runtime;
+# copy them explicitly — Next.js standalone output does not trace dynamic imports
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/playwright      ./node_modules/playwright
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/playwright-core ./node_modules/playwright-core
 
 # Write a global wrapper so `prisma` is available as a bare command.

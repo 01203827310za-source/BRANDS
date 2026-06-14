@@ -140,8 +140,8 @@ async function crawlWithFetch(url: string): Promise<CrawlerResult> {
 // ─── Playwright backend ───────────────────────────────────────────────────────
 
 async function crawlWithPlaywright(url: string): Promise<CrawlerResult> {
-  // Dynamic import keeps playwright-core out of the webpack bundle
-  const { chromium } = await import('playwright-core');
+  // Dynamic import — excluded from webpack bundle via next.config.js externals
+  const { chromium } = await import('playwright');
 
   const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH || undefined;
 
@@ -159,29 +159,79 @@ async function crawlWithPlaywright(url: string): Promise<CrawlerResult> {
       '--disable-sync',
       '--no-first-run',
       '--disable-blink-features=AutomationControlled',
+      '--disable-infobars',
+      '--window-size=1366,768',
+      '--lang=en-US,en',
     ],
   });
 
   try {
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       locale: 'en-US',
+      timezoneId: 'America/New_York',
+      viewport: { width: 1366, height: 768 },
       extraHTTPHeaders: {
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,' +
+          'image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Sec-CH-UA': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        'Accept-Encoding': 'gzip, deflate, br',
+        Referer: 'https://www.google.com/',
+        'Cache-Control': 'max-age=0',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-CH-UA': '"Google Chrome";v="124", "Chromium";v="124", "Not-A.Brand";v="24"',
         'Sec-CH-UA-Mobile': '?0',
         'Sec-CH-UA-Platform': '"Windows"',
-        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
       },
-      viewport: { width: 1280, height: 800 },
     });
 
     const page = await context.newPage();
 
-    // Hide automation fingerprint
+    // Injected before any page JS — eliminates the most common bot-detection signals
     await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      // navigator.webdriver must be undefined (not false) to pass strict checks
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+      // Real Chrome exposes plugins; headless Chromium has 0
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+          const arr = [
+            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: '' },
+            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+            { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
+          ];
+          Object.setPrototypeOf(arr, PluginArray.prototype);
+          return arr;
+        },
+      });
+
+      // Languages
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+
+      // chrome.runtime must exist in real Chrome
+      (window as any).chrome = {
+        runtime: {
+          id: 'a'.repeat(32),
+          onMessage: { addListener: () => {} },
+          sendMessage: () => {},
+        },
+      };
+
+      // Notifications permission leak (headless always returns 'denied')
+      const origQuery = window.navigator.permissions?.query?.bind(window.navigator.permissions);
+      if (origQuery) {
+        window.navigator.permissions.query = (params: any) =>
+          params.name === 'notifications'
+            ? Promise.resolve({ state: 'default', onchange: null } as any)
+            : origQuery(params);
+      }
     });
 
     let httpStatus = 0;
@@ -197,14 +247,45 @@ async function crawlWithPlaywright(url: string): Promise<CrawlerResult> {
     try {
       await page.goto(url, { waitUntil: 'networkidle', timeout: PLAYWRIGHT_TIMEOUT_MS });
     } catch (navError: any) {
-      // networkidle timeout is fine — some pages poll forever
+      // networkidle times out on pages with long-polling — that is OK
       if (!String(navError.message).includes('Timeout')) throw navError;
       finalUrl = page.url();
       console.log(`[Crawler] Playwright networkidle timeout (non-fatal) | url=${url}`);
     }
 
+    const pageTitle = await page.title().catch(() => '');
+    const resolvedUrl = page.url();
+
+    console.log(
+      `[Crawler] Playwright page loaded` +
+      ` | title="${pageTitle}"` +
+      ` | finalUrl=${resolvedUrl}` +
+      ` | httpStatus=${httpStatus || 'n/a'}`,
+    );
+
     if (httpStatus >= 400) {
-      throw new Error(`HTTP ${httpStatus} via Playwright | finalUrl=${finalUrl}`);
+      // Capture a debug snapshot — not a crawler bug, this is an anti-bot block
+      try {
+        const snapshot = await page.content();
+        console.warn(
+          `[Crawler] Anti-bot block: HTTP ${httpStatus}` +
+          ` | title="${pageTitle}"` +
+          ` | finalUrl=${resolvedUrl}` +
+          ` | HTML snippet (first 2000 chars):\n` +
+          snapshot.slice(0, 2000),
+        );
+        const shot = await page.screenshot({ type: 'png', fullPage: false });
+        console.warn(
+          `[Crawler] Screenshot captured: ${shot.length} bytes` +
+          ` — anti-bot block, not a crawler failure`,
+        );
+      } catch {}
+
+      throw new Error(
+        `Anti-bot block: HTTP ${httpStatus}` +
+        ` | title="${pageTitle}"` +
+        ` | finalUrl=${resolvedUrl}`,
+      );
     }
 
     // Allow JS-rendered product grids a moment to populate
@@ -218,7 +299,7 @@ async function crawlWithPlaywright(url: string): Promise<CrawlerResult> {
     return {
       success: true,
       items,
-      metadata: { url, finalUrl, httpStatus, itemCount: items.length, usedPlaywright: true },
+      metadata: { url, finalUrl, pageTitle, httpStatus, itemCount: items.length, usedPlaywright: true },
     };
   } finally {
     await browser.close().catch(() => {});
